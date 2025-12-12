@@ -37,7 +37,7 @@ func TestExtenderTestExtender(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if diff := cmp.Diff(want, got.Bytes()); diff != "" {
+			if diff := cmp.Diff(strings.ReplaceAll(string(want), "\r\n", "\n"), strings.ReplaceAll(got.String(), "\r\n", "\n")); diff != "" {
 				t.Fatalf("%s:\n\nwant:\n%s\n\ngot:\n%s\n\ndiff:\n%s\n", entry.Name(), want, got.String(), diff)
 			}
 		})

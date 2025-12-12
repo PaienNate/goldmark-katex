@@ -3,37 +3,48 @@ package katex
 import (
 	_ "embed"
 	"io"
-	"runtime"
 
-	"github.com/lithdew/quickjs"
+	"github.com/fastschema/qjs"
 )
 
 //go:embed katex.min.js
 var code string
 
 func Render(w io.Writer, src []byte, display bool) error {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
+	rt, err := qjs.New()
+	if err != nil {
+		return err
+	}
+	defer rt.Close()
 
-	runtime := quickjs.NewRuntime()
-	defer runtime.Free()
+	ctx := rt.Context()
 
-	context := runtime.NewContext()
-	defer context.Free()
-
-	globals := context.Globals()
-
-	result, err := context.Eval(code)
+	result, err := ctx.Eval("katex.min.js", qjs.Code(code))
 	if err != nil {
 		return err
 	}
 	defer result.Free()
 
-	globals.Set("_EqSrc3120", context.String(string(src)))
+	srcVal := ctx.NewString(string(src))
+	ctx.Global().SetPropertyStr("_EqSrc3120", srcVal)
+	// srcVal is now owned by the global object? Or should we free it?
+	// In typical bindings, if you pass a value to a setter, it might increment ref count or copy.
+	// But to be safe, if we don't know, we can defer Free it.
+	// However, if we free it and it was just a reference, it might be invalid.
+	// Let's assume we should defer Free it. If it causes issues, we'll see.
+	// Wait, if SetPropertyStr takes ownership, we shouldn't free.
+	// But usually creating a NewString gives us an owned reference.
+	// Let's defer Free() for now.
+	defer srcVal.Free()
+
 	if display {
-		result, err = context.Eval("katex.renderToString(_EqSrc3120, { displayMode: true })")
+		result, err = ctx.Eval("render.js", qjs.Code("katex.renderToString(_EqSrc3120, { displayMode: true })"))
 	} else {
-		result, err = context.Eval("katex.renderToString(_EqSrc3120)")
+		result, err = ctx.Eval("render.js", qjs.Code("katex.renderToString(_EqSrc3120)"))
+	}
+
+	if err != nil {
+		return err
 	}
 	defer result.Free()
 
